@@ -4,17 +4,6 @@ using GrpcFmeClient = FeatureManagementExperimentation.Grpc.Fme.FmeClient;
 
 namespace eShop.WebApp.Services;
 
-   /// <summary>
-   /// A list of FME feature flag names (strings).
-   /// </summary>
-   /// <remarks>
-   /// These string values must match feature flag *Name* values in Harness FME.
-   /// </remarks>
-   public readonly struct FlagNames {
-    public const string DisplayProductRating = "display_product_rating";
-    public const string DisplayDiscount      = "display_discount";
-};
-
 public class FmeService(GrpcFmeClient fmeClient, ILogger<FmeService> logger)
 {
     public async Task<string> GetFlagTreatmentAsync(string flagName) => await GetFlagTreatmentAsync(flagName, null);
