@@ -148,7 +148,7 @@ This version of eShop includes a gRPC backend microservice that evaluates Harnes
 To evaluate feature flags in code:
 1. [Sign up to Harness for free](https://app.harness.io/auth/#/signup) and choose the Feature Management & Experimentation tile.
 2. Find your [Harness FME server-side SDK API key](https://developer.harness.io/docs/feature-management-experimentation/api-keys?fme-split=fme) value (take note of the associated **Environment**).
-3. On your machine, create a `YOUR_SDK_KEY` environment variable and set the value to be the API key value. The FME microservice will use this value for authentication.
+3. On your machine, create a `FME_SERVERSIDE_SDK_KEY` environment variable and set the value to be the API key value. The FME microservice will use this value for authentication.
 4. Create two FME feature flags named `display_product_rating` and `display_discount`.
 5. Create definitions for each feature flag in the FME Environment that matches your API key, as follows:
   - `display_product_rating` 

@@ -23,7 +23,7 @@ public sealed class FmeService : Fme.FmeBase
             // set up FME API connection
             _fmeSdkClient ??= 
                 new SplitFactory( 
-                    Environment.GetEnvironmentVariable("YOUR_SDK_KEY"),
+                    Environment.GetEnvironmentVariable("FME_SERVERSIDE_SDK_KEY"),
                     new ConfigurationOptions{ Logger = new FmeLogger(logger) } )
                 .Client();
             _fmeSdkClient?.BlockUntilReady(10 * 1000);  // wait 10 seconds for FME feature flag targeting rules and segments to be fetched
