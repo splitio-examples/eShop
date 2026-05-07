@@ -1,6 +1,6 @@
 pipeline:
   name: Adventure Works - Feature Rollouts
-  identifier: Adventure_Works_Feature_Rollouts
+  identifier: Adventure_Works_Feature_Rollouts_v2
   projectIdentifier: lena_playground
   orgIdentifier: default
   tags: {}
@@ -60,31 +60,24 @@ pipeline:
                               keys:
                                 - a3
                               segments: []
-                    - step:
-                        type: Wait
-                        name: pause 30s
-                        identifier: pause_30s
-                        spec:
-                          duration: 30s
-                      contextType: Pipeline
-                    - step:
-                        type: FmeFlagAddRemoveIndividualTargets
-                        name: Remove a0 Target
-                        identifier: Remove_a0_Target
-                        spec:
-                          flagName: <+pipeline.variables.fme_feature_flag_name>
-                          environment: <+pipeline.variables.fme_environment>
-                          treatments:
-                            - treatment: black
-                              removeKeys:
-                                - a0
-                      contextType: Pipeline
               - step:
-                  type: Wait
-                  name: pause 30s .
-                  identifier: pause_30s_2
+                  type: HarnessApproval
+                  name: Validate Feature Variations in Production
+                  identifier: Validate_Feature_Variations_in_Production
                   spec:
-                    duration: 30s
+                    approvalMessage: |-
+                      Please review the following information and approve the pipeline progression:
+
+                      Approve once you confirm that all feature flag treatments run correctly in production.
+                    includePipelineExecutionHistory: true
+                    isAutoRejectEnabled: false
+                    approvers:
+                      userGroups:
+                        - account.FME_Pipeline_Approvers
+                      minimumCount: 1
+                      disallowPipelineExecutor: false
+                    approverInputs: []
+                  timeout: 1w 3d
               - stepGroup:
                   name: Set Up Experiment
                   identifier: Set_Up_Experiment
@@ -123,10 +116,10 @@ pipeline:
                               amount: 25
               - step:
                   type: Wait
-                  name: pause 60s
+                  name: wait 2 days
                   identifier: pause_60s_3
                   spec:
-                    duration: 1m
+                    duration: 30s
               - stepGroup:
                   name: Complete Experiment
                   identifier: Complete_Experiment
@@ -141,6 +134,8 @@ pipeline:
                             1. Review experiment results.
                             2. Take special note of key and guardrail metric results.
                             3. Choose the feature flag variation that should remain in production. (You must choose only one feature flag treatment.)
+
+                            https://app.harness.io/ng/account/4lpFbH_aSFWJZkukMM4P4A/module/fme/orgs/default/projects/lena_playground/org/472cebe0-e5ab-11f0-a297-526ddf23eb97/ws/ea636120-faed-11f0-9626-0a1527d0f26c/experiments/01KJ3B71Q2KB0DVZHXBHWMZJG3
                           includePipelineExecutionHistory: true
                           isAutoRejectEnabled: false
                           approvers:
@@ -180,6 +175,10 @@ pipeline:
                                             {"treatment": "goldenrod" ,"size": 0 },
                                             {"treatment": "off"       ,"size": 5 }
                                         ]
+                                    },
+                                    {
+                                        "op"  : "remove", 
+                                        "path": "/treatments/0/keys/0"
                                     },
                                     {
                                         "op"  : "remove", 
@@ -230,6 +229,10 @@ pipeline:
                                     },
                                     {
                                         "op"  : "remove", 
+                                        "path": "/treatments/0/keys/0"
+                                    },
+                                    {
+                                        "op"  : "remove", 
                                         "path": "/treatments/1/keys/0"
                                     },
                                     {
@@ -277,6 +280,10 @@ pipeline:
                                     },
                                     {
                                         "op"  : "remove", 
+                                        "path": "/treatments/0/keys/0"
+                                    },
+                                    {
+                                        "op"  : "remove", 
                                         "path": "/treatments/1/keys/0"
                                     },
                                     {
@@ -321,6 +328,10 @@ pipeline:
                                             {"treatment": "black"     ,"size": 0  },
                                             {"treatment": "off"       ,"size": 100}
                                         ]
+                                    },
+                                    {
+                                        "op"  : "remove", 
+                                        "path": "/treatments/0/keys/0"
                                     },
                                     {
                                         "op"  : "remove", 
@@ -397,12 +408,15 @@ pipeline:
                           flagName: <+pipeline.variables.fme_feature_flag_name>
                           environment: <+pipeline.variables.fme_environment>
                           limit: 53
+                        enforce:
+                          policySets:
+                            - Pipeline_Step_Policy_Custom_entity_type_On_Step
                     - step:
                         type: Wait
-                        name: pause 10s ..
+                        name: pause 30s ..
                         identifier: pause_10s_6
                         spec:
-                          duration: 10s
+                          duration: 30s
                     - step:
                         type: FmeFlagLimitExposure
                         name: Roll Out to 75 Percent
@@ -413,10 +427,10 @@ pipeline:
                           limit: 79
                     - step:
                         type: Wait
-                        name: pause 10s ...
+                        name: pause 30s ...
                         identifier: pause_10s_7
                         spec:
-                          duration: 10s
+                          duration: 30s
                     - step:
                         type: FmeFlagLimitExposure
                         name: Roll Out to 95 Percent
@@ -525,7 +539,7 @@ pipeline:
                     condition: <+execution.steps.Complete_Experiment.steps.Choose_Flag_Variant_Based_on_Experiment_Results.output.approverInputs.approved_flag_treatment> != "off"
               - step:
                   type: Wait
-                  name: pause 10s ... .
+                  name: Automated Feature Flag Cleanup
                   identifier: pause_10s_8
                   spec:
                     duration: 10s
@@ -538,13 +552,17 @@ pipeline:
                   steps:
                     - step:
                         type: HarnessApproval
-                        name: Transition Feature Flag - Confirm Removed From Code
+                        name: Merge flag removal PR and deploy to production
                         identifier: Transition_Feature_Flag_Confirm_Removed_From_Code
                         spec:
                           approvalMessage: |-
-                            Please confirm that all references to this feature flag have been removed from code, and this flag can be killed in Harness FME.
+                            Is the flag removed from the code in production?
 
-                            This step is to avoid tech debt.
+                            Approve this step after you:
+                            * merge the flag removal PR
+                            * deploy the new code to production
+
+                            The next pipeline steps will archive the feature flag in FME to prevent tech debt.
                           includePipelineExecutionHistory: true
                           isAutoRejectEnabled: false
                           approvers:
@@ -584,6 +602,18 @@ pipeline:
                                 - Unknown
                               action:
                                 type: MarkAsSuccess
+                    - step:
+                        type: Wait
+                        name: pause 10s ... ...
+                        identifier: pause_10s_
+                        spec:
+                          duration: 10s
+                    - step:
+                        type: FmeFlagArchive
+                        name: Archive Flag
+                        identifier: Archive_Flag
+                        spec:
+                          name: display_product_rating
                   when:
                     stageStatus: Success
                     condition: <+execution.steps.Complete_Experiment.steps.Choose_Flag_Variant_Based_on_Experiment_Results.output.approverInputs.approved_flag_treatment> != "off"
