@@ -1,13 +1,13 @@
 pipeline:
-  name: Adventure Works - Feature Rollouts
-  identifier: Adventure_Works_Feature_Rollouts_v2
+  name: Adventure Works - Feature Rollout
+  identifier: Adventure_Works_Feature_Rollout_v3
   projectIdentifier: lena_playground
   orgIdentifier: default
   tags: {}
   variables:
     - name: fme_feature_flag_name
       type: String
-      description: ""
+      description: This is a Harness CD pipeline example that demonstrates the orchestration of a safe, measured feature release. The pipeline uses Harness FME steps to run a feature beta release, canary release with experimentation support, and a monitored gradual rollout. FME steps also manage the feature flag life cycle.
       required: true
       value: display_product_rating
     - name: fme_environment
@@ -17,9 +17,64 @@ pipeline:
       value: Production-Env
   stages:
     - stage:
+        name: Dark Deploy Feature
+        identifier: Dark_Deploy_Feature
+        description: This stage deploys application code to production (deploys a Canary instance and promotes to Rolling upon approval). After this stage completes, your feature is in production code, but it is behind an FME feature flag (the flag targeting rules should serve 'off'), this means your feature is not visible to end users.
+        type: Deployment
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: PipelineRollback
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: canary_service
+            failureStrategies:
+              - onFailure:
+                  errors:
+                    - AllErrors
+                  action:
+                    type: PipelineRollback
+          environment:
+            environmentRef: canary_environment
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: canary_infrastructure
+          execution:
+            steps:
+              - step:
+                  name: Canary Deployment
+                  identifier: Canary_Deploy_Step
+                  type: K8sCanaryDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    instanceSelection:
+                      type: Count
+                      spec:
+                        count: 1
+              - step:
+                  name: Canary Delete
+                  identifier: Canary_Delete_Step
+                  type: K8sCanaryDelete
+                  timeout: 10m
+                  spec: {}
+              - step:
+                  name: Primary Rolling Deployment
+                  identifier: Rolling_Deploy_Step
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps: []
+        tags: {}
+    - stage:
         name: Rollout Feature
         identifier: Rollout_Feature
-        description: ""
+        description: This stage uses FME steps to perform a feature beta release, canary release, and gradual rollout. The canary release and gradual rollout step groups set up the flag for experimentation and monitoring, which allows you to roll out safely.
         type: Custom
         spec:
           execution:
@@ -537,85 +592,198 @@ pipeline:
                   when:
                     stageStatus: Success
                     condition: <+execution.steps.Complete_Experiment.steps.Choose_Flag_Variant_Based_on_Experiment_Results.output.approverInputs.approved_flag_treatment> != "off"
+        tags: {}
+    - stage:
+        name: Automated Flag Cleanup
+        identifier: Automated_Flag_Cleanup
+        description: ""
+        type: Custom
+        spec:
+          execution:
+            steps:
               - step:
-                  type: Wait
-                  name: Automated Feature Flag Cleanup
-                  identifier: pause_10s_8
+                  name: Create flag removal ticket
+                  identifier: Create_flag_removal_ticket
+                  type: JiraCreate
+                  timeout: 5m
                   spec:
-                    duration: 10s
-                  when:
-                    stageStatus: Success
-                    condition: <+execution.steps.Complete_Experiment.steps.Choose_Flag_Variant_Based_on_Experiment_Results.output.approverInputs.approved_flag_treatment> != "off"
+                    connectorRef: connectorRef
+                    projectKey: project
+                    issueType: Task
+                    fields: []
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
               - stepGroup:
-                  name: Tech Debt Clean Up
-                  identifier: Tech_Debt_Clean_Up
+                  name: container based execution
+                  identifier: container_based_execution
                   steps:
                     - step:
-                        type: HarnessApproval
-                        name: Merge flag removal PR and deploy to production
-                        identifier: Transition_Feature_Flag_Confirm_Removed_From_Code
+                        type: Agent
+                        name: Feature Flag Cleanup
+                        identifier: Feature_Flag_Cleanup
                         spec:
-                          approvalMessage: |-
-                            Is the flag removed from the code in production?
-
-                            Approve this step after you:
-                            * merge the flag removal PR
-                            * deploy the new code to production
-
-                            The next pipeline steps will archive the feature flag in FME to prevent tech debt.
-                          includePipelineExecutionHistory: true
-                          isAutoRejectEnabled: false
-                          approvers:
-                            userGroups:
-                              - account.FME_Pipeline_Approvers
-                            minimumCount: 1
-                            disallowPipelineExecutor: false
-                          approverInputs: []
-                        timeout: 6w
-                      contextType: Pipeline
-                    - step:
-                        type: FmeFlagUpdate
-                        name: Set Flag Status to Removed From Code
-                        identifier: Set_Flag_Status_to_Removed_From_Code
-                        spec:
-                          name: <+pipeline.variables.fme_feature_flag_name>
-                          rolloutStatus: Removed from Code
-                          addDefaultRolloutPlans: true
-                      contextType: Pipeline
-                    - step:
-                        type: Wait
-                        name: pause 10s ... ..
-                        identifier: pause_10s_9
-                        spec:
-                          duration: 10s
-                      contextType: Pipeline
-                    - step:
-                        type: FmeFlagKill
-                        name: Kill Feature Flag
-                        identifier: Kill_Feature_Flag
-                        spec:
-                          flagName: <+pipeline.variables.fme_feature_flag_name>
-                          environment: <+pipeline.variables.fme_environment>
-                        failureStrategies:
-                          - onFailure:
-                              errors:
-                                - Unknown
-                              action:
-                                type: MarkAsSuccess
-                    - step:
-                        type: Wait
-                        name: pause 10s ... ...
-                        identifier: pause_10s_
-                        spec:
-                          duration: 10s
-                    - step:
-                        type: FmeFlagArchive
-                        name: Archive Flag
-                        identifier: Archive_Flag
-                        spec:
-                          name: display_product_rating
-                  when:
-                    stageStatus: Success
-                    condition: <+execution.steps.Complete_Experiment.steps.Choose_Flag_Variant_Based_on_Experiment_Results.output.approverInputs.approved_flag_treatment> != "off"
+                          agentName: featureFlagCleanupAgent
+                          agentSettings:
+                            repo: ""
+                            treatment: <+pipeline.stages.Rollout_Feature.spec.execution.steps.Complete_Experiment.steps.Set_Chosen_Flag_Variant_black.spec.inputVariables.approved_flag_treatment>
+                            branch: harness_fme_rm_display_product_rating_flag
+                            feature_flag: display_product_rating
+              - step:
+                  name: Wait for ticket to be DONE
+                  identifier: Wait_for_ticket_to_be_DONE
+                  type: JiraApproval
+                  timeout: 1d
+                  spec:
+                    connectorRef: connectorRef
+                    issueKey: PROJ-123
+                    issueType: Task
+                    projectKey: project
+                    approvalCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: false
+                        conditions:
+                          - key: Status
+                            operator: equals
+                            value: Done
+                    rejectionCriteria:
+                      type: KeyValues
+                      spec:
+                        matchAnyCondition: false
+                        conditions: []
+                    retryInterval: 1m
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+              - step:
+                  name: Close Jira ticket
+                  identifier: Close_Jira_ticket
+                  type: JiraUpdate
+                  timeout: 5m
+                  spec:
+                    connectorRef: JIRA_connector
+                    issueKey: PROJ-123
+                    fields: []
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - AllErrors
+                        action:
+                          type: MarkAsSuccess
+        tags: {}
+    - stage:
+        name: Clean Deploy Feature
+        identifier: Clean_Deploy_Feature
+        description: This stage canary-deploys the chosen feature variation to production, with the flag evaluation code removed. After this stage, production code no longer evaluates the feature flag.
+        type: Deployment
+        failureStrategies:
+          - onFailure:
+              errors:
+                - AllErrors
+              action:
+                type: PipelineRollback
+        spec:
+          deploymentType: Kubernetes
+          service:
+            serviceRef: canary_service
+            failureStrategies:
+              - onFailure:
+                  errors:
+                    - AllErrors
+                  action:
+                    type: PipelineRollback
+          environment:
+            environmentRef: canary_environment
+            deployToAll: false
+            infrastructureDefinitions:
+              - identifier: canary_infrastructure
+          execution:
+            steps:
+              - step:
+                  name: Canary Deployment
+                  identifier: Canary_Deploy_Step
+                  type: K8sCanaryDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    instanceSelection:
+                      type: Count
+                      spec:
+                        count: 1
+              - step:
+                  name: Canary Delete
+                  identifier: Canary_Delete_Step
+                  type: K8sCanaryDelete
+                  timeout: 10m
+                  spec: {}
+              - step:
+                  name: Primary Rolling Deployment
+                  identifier: Rolling_Deploy_Step
+                  type: K8sRollingDeploy
+                  timeout: 10m
+                  spec:
+                    skipDryRun: false
+                    pruningEnabled: false
+            rollbackSteps: []
+        tags: {}
+    - stage:
+        name: Archive Feature Flag
+        identifier: Archive_Feature_Flag
+        description: This stage completes the FME flag lifecycle in Harness.
+        type: Custom
+        spec:
+          execution:
+            steps:
+              - step:
+                  type: FmeFlagUpdate
+                  name: Set Flag Status to Removed From Code
+                  identifier: Set_Flag_Status_to_Removed_From_Code
+                  spec:
+                    name: <+pipeline.variables.fme_feature_flag_name>
+                    rolloutStatus: Removed from Code
+                    addDefaultRolloutPlans: true
+                contextType: Pipeline
+              - step:
+                  type: Wait
+                  name: pause 10s ... ..
+                  identifier: pause_10s_9
+                  spec:
+                    duration: 10s
+                contextType: Pipeline
+              - step:
+                  type: FmeFlagKill
+                  name: Kill Feature Flag
+                  identifier: Kill_Feature_Flag
+                  spec:
+                    flagName: <+pipeline.variables.fme_feature_flag_name>
+                    environment: <+pipeline.variables.fme_environment>
+                  failureStrategies:
+                    - onFailure:
+                        errors:
+                          - Unknown
+                        action:
+                          type: MarkAsSuccess
+              - step:
+                  type: Wait
+                  name: pause 10s ... ...
+                  identifier: pause_10s_
+                  spec:
+                    duration: 10s
+              - step:
+                  type: FmeFlagArchive
+                  name: Archive Flag
+                  identifier: Archive_Flag
+                  spec:
+                    name: display_product_rating
+            when:
+              stageStatus: Success
+              condition: <+execution.steps.Complete_Experiment.steps.Choose_Flag_Variant_Based_on_Experiment_Results.output.approverInputs.approved_flag_treatment> != "off"
         tags: {}
   allowStageExecutions: true
