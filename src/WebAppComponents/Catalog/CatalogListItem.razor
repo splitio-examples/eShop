@@ -16,10 +16,7 @@
                     <span class='percent-off'> (@Discount% OFF)</span>
                 }
             </span>
-            @if( Fme.IsFlagOn(@DisplayRating) )
-            {
-                <span class='item-rating' style='color:@DisplayRating'>@Rating</span>   // <span>☆★★★★</span>
-            }
+            <span class='item-rating' style='color:black'>@Rating</span>   // <span>☆★★★★</span>
         </span>
     </a>
 </div>
@@ -27,9 +24,6 @@
 @code {
     [Parameter, EditorRequired]
     public required CatalogItem Item { get; set; }
-
-    [Parameter]
-    public string? DisplayRating { get; set; }
 
     [Parameter]
     public string? DisplayDiscount { get; set; }

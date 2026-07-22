@@ -9,7 +9,6 @@ public static class Fme
     /// These string values must match feature flag *Name* values in Harness FME.
     /// </remarks>
     public readonly struct FlagNames {
-        public const string DisplayProductRating = "display_product_rating";
         public const string DisplayDiscount      = "display_discount";
     };
 

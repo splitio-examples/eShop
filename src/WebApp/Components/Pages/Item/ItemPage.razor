@@ -2,7 +2,6 @@
 @using System.Net
 @inject CatalogService CatalogService
 @inject BasketState BasketState
-@inject FmeService FmeService
 @inject NavigationManager Nav
 @inject IProductImageUrlProvider ProductImages
 @inject ILoggerFactory LoggerFactory
@@ -22,10 +21,7 @@
         <img alt="@item.Name" src="@ProductImages.GetProductImageUrl(item)" />
         <div class="description">
             <p>@item.Description</p>
-            @if( Fme.IsFlagOn(displayRating) )
-            {
-                <span style='color:@displayRating'>@Rating</span>
-            }
+            <span style='color:black'>@Rating</span>
             <p>
                 Brand: <strong>@item.CatalogBrand?.Brand</strong>
             </p>
@@ -92,8 +88,6 @@ else if (notFound)
             isLoggedIn = HttpContext?.User.Identity?.IsAuthenticated == true;
             item = await CatalogService.GetCatalogItem(ItemId);
             await UpdateNumInCartAsync();
-
-            displayRating   = await FmeService.GetFlagTreatmentAsync(Fme.FlagNames.DisplayProductRating);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
